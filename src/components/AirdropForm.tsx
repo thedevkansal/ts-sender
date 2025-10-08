@@ -7,6 +7,7 @@ import { chainsToTSender } from "@/constants";
 import { getApprovedAmount } from "@/utils/checkAllowance";
 import { parseAirdropData } from "@/utils/parseAirdropData";
 import { approveToken } from "@/utils/approveToken";
+import { sendAirdrop } from "@/utils/sendAirdrop";
 
 export default function AirdropForm() {
   const [tokenAddress, setTokenAddress] = useState("");
@@ -83,7 +84,35 @@ export default function AirdropForm() {
         }
       }
 
-    // TODO: Send tokens logic to be implemented
+      // Send the airdrop transaction
+      console.log("🚀 Sending airdrop...");
+
+      // Convert parsed data to proper format
+      const recipientAddresses = parsedData.recipientList as `0x${string}`[];
+      const amountsBigInt = parsedData.amountList.map((amt) => {
+        try {
+          return BigInt(amt);
+        } catch {
+          throw new Error(`Invalid amount: ${amt}`);
+        }
+      });
+
+      const txHash = await sendAirdrop(
+        tsenderAddress as `0x${string}`,
+        tokenAddress as `0x${string}`,
+        recipientAddresses,
+        amountsBigInt,
+        requiredAmount
+      );
+
+      console.log("✅ Airdrop completed successfully!");
+      alert(
+        `✅ Airdrop successful!\n\nTransaction: ${txHash}\n\nTokens sent to ${parsedData.recipientCount} recipients.`
+      );
+
+      // Clear form after successful airdrop
+      setRecipients("");
+      setAmounts("");
     } catch (error) {
       console.error("❌ Error:", error);
       alert(
