@@ -6,6 +6,7 @@ import { useChainId, useConfig, useAccount } from "wagmi";
 import { chainsToTSender } from "@/constants";
 import { getApprovedAmount } from "@/utils/checkAllowance";
 import { parseAirdropData } from "@/utils/parseAirdropData";
+import { approveToken } from "@/utils/approveToken";
 
 export default function AirdropForm() {
   const [tokenAddress, setTokenAddress] = useState("");
@@ -13,6 +14,7 @@ export default function AirdropForm() {
   const [amounts, setAmounts] = useState("");
   const [tokenName, setTokenName] = useState("");
   const [tokenDecimals, setTokenDecimals] = useState(18);
+  const [isSending, setIsSending] = useState(false);
 
   const account = useAccount();
   const chainId = useChainId();
@@ -24,7 +26,6 @@ export default function AirdropForm() {
   }, [recipients, amounts, tokenDecimals]);
 
   const handleSendTokens = async () => {
-    // Get chain and tsender address
     const tsenderAddress = chainId ? chainsToTSender[chainId]?.tsender : null;
 
     if (!tsenderAddress) {
@@ -37,15 +38,12 @@ export default function AirdropForm() {
       return;
     }
 
-    console.log("🔍 Checking allowance...", {
-      chainId,
-      tsenderAddress,
-      tokenAddress,
-      userAddress: account.address,
-    });
+    setIsSending(true);
 
     try {
-      // Call helper function to check allowance
+      console.log("🔍 Checking allowance...");
+
+      // Check current allowance
       const currentAllowance = await getApprovedAmount(
         tsenderAddress as `0x${string}`,
         tokenAddress as `0x${string}`,
@@ -60,25 +58,39 @@ export default function AirdropForm() {
         sufficient: currentAllowance >= requiredAmount,
       });
 
+      // If insufficient allowance, request approval
       if (currentAllowance < requiredAmount) {
-        alert(
-          `Insufficient allowance!\n\nCurrent: ${formatUnits(
-            currentAllowance,
-            tokenDecimals
-          )} tokens\nRequired: ${
-            parsedData.totalTokens
-          } tokens\n\nPlease approve the TSender contract first.`
-        );
-        return;
+        console.log("⚠️ Insufficient allowance, requesting approval...");
+
+        try {
+          await approveToken(
+            tokenAddress as `0x${string}`,
+            tsenderAddress as `0x${string}`,
+            requiredAmount
+          );
+          console.log("✅ Approval successful!");
+        } catch (approvalError) {
+          console.error("❌ Approval failed:", approvalError);
+          alert(
+            `Approval failed: ${
+              approvalError instanceof Error
+                ? approvalError.message
+                : "Unknown error"
+            }`
+          );
+          setIsSending(false);
+          return;
+        }
       }
-      // TODO: Implement token sending logic
+
+    // TODO: Send tokens logic to be implemented
     } catch (error) {
-      console.error("❌ Error checking allowance:", error);
+      console.error("❌ Error:", error);
       alert(
-        `Error checking allowance: ${
-          error instanceof Error ? error.message : "Unknown error"
-        }`
+        `Error: ${error instanceof Error ? error.message : "Unknown error"}`
       );
+    } finally {
+      setIsSending(false);
     }
   };
 
@@ -162,10 +174,10 @@ export default function AirdropForm() {
         {/* Send Button */}
         <button
           onClick={handleSendTokens}
-          disabled={!tokenAddress || !recipients || !amounts}
+          disabled={!tokenAddress || !recipients || !amounts || isSending}
           className="w-full bg-blue-500 hover:bg-blue-600 disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-semibold py-4 rounded-lg transition-all shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 active:translate-y-0"
         >
-          Send Tokens
+          {isSending ? "Processing..." : "Send Tokens"}
         </button>
       </div>
     </div>
