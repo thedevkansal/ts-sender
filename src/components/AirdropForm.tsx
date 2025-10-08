@@ -1,10 +1,11 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { formatUnits, parseUnits } from "viem";
+import { formatUnits } from "viem";
 import { useChainId, useConfig, useAccount } from "wagmi";
 import { chainsToTSender } from "@/constants";
-import getApprovedAmount from "@/utils/checkAllowance";
+import { getApprovedAmount } from "@/utils/checkAllowance";
+import { parseAirdropData } from "@/utils/parseAirdropData";
 
 export default function AirdropForm() {
   const [tokenAddress, setTokenAddress] = useState("");
@@ -17,35 +18,9 @@ export default function AirdropForm() {
   const chainId = useChainId();
   const config = useConfig();
 
-  // Parse recipients and amounts
+  // Parse recipients and amounts using utility function
   const parsedData = useMemo(() => {
-    const recipientList = recipients
-      .split(/[,\n]/)
-      .map((addr) => addr.trim())
-      .filter((addr) => addr.length > 0);
-
-    const amountList = amounts
-      .split(/[,\n]/)
-      .map((amt) => amt.trim())
-      .filter((amt) => amt.length > 0);
-
-    const totalWei = amountList.reduce((sum, amt) => {
-      try {
-        return sum + BigInt(amt);
-      } catch {
-        return sum;
-      }
-    }, BigInt(0));
-
-    const totalTokens =
-      totalWei > 0 ? formatUnits(totalWei, tokenDecimals) : "0.00";
-
-    return {
-      recipientCount: recipientList.length,
-      amountCount: amountList.length,
-      totalWei: totalWei.toString(),
-      totalTokens,
-    };
+    return parseAirdropData(recipients, amounts, tokenDecimals);
   }, [recipients, amounts, tokenDecimals]);
 
   const handleSendTokens = async () => {
@@ -172,7 +147,7 @@ export default function AirdropForm() {
             <div className="flex justify-between items-center">
               <span className="text-gray-600">Amount (wei):</span>
               <span className="font-mono text-gray-900">
-                {parsedData.totalWei}
+                {parsedData.totalWeiString}
               </span>
             </div>
             <div className="flex justify-between items-center">
