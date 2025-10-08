@@ -2,6 +2,9 @@
 
 import { useState, useMemo } from "react";
 import { formatUnits, parseUnits } from "viem";
+import { useChainId, useConfig, useAccount } from "wagmi";
+import { chainsToTSender } from "@/constants";
+import getApprovedAmount from "@/utils/checkAllowance";
 
 export default function AirdropForm() {
   const [tokenAddress, setTokenAddress] = useState("");
@@ -9,6 +12,10 @@ export default function AirdropForm() {
   const [amounts, setAmounts] = useState("");
   const [tokenName, setTokenName] = useState("");
   const [tokenDecimals, setTokenDecimals] = useState(18);
+
+  const account = useAccount();
+  const chainId = useChainId();
+  const config = useConfig();
 
   // Parse recipients and amounts
   const parsedData = useMemo(() => {
@@ -42,15 +49,62 @@ export default function AirdropForm() {
   }, [recipients, amounts, tokenDecimals]);
 
   const handleSendTokens = async () => {
-    // TODO: Implement token sending logic
-    console.log("Sending tokens...", {
+    // Get chain and tsender address
+    const tsenderAddress = chainId ? chainsToTSender[chainId]?.tsender : null;
+
+    if (!tsenderAddress) {
+      alert("TSender contract not found for this chain!");
+      return;
+    }
+
+    if (!account.address) {
+      alert("Please connect your wallet!");
+      return;
+    }
+
+    console.log("🔍 Checking allowance...", {
+      chainId,
+      tsenderAddress,
       tokenAddress,
-      recipients,
-      amounts,
+      userAddress: account.address,
     });
-    alert(
-      "Token sending functionality will be implemented with smart contract interaction!"
-    );
+
+    try {
+      // Call helper function to check allowance
+      const currentAllowance = await getApprovedAmount(
+        tsenderAddress as `0x${string}`,
+        tokenAddress as `0x${string}`,
+        account.address
+      );
+
+      const requiredAmount = BigInt(parsedData.totalWei);
+
+      console.log("✅ Allowance check complete:", {
+        currentAllowance: currentAllowance.toString(),
+        requiredAmount: requiredAmount.toString(),
+        sufficient: currentAllowance >= requiredAmount,
+      });
+
+      if (currentAllowance < requiredAmount) {
+        alert(
+          `Insufficient allowance!\n\nCurrent: ${formatUnits(
+            currentAllowance,
+            tokenDecimals
+          )} tokens\nRequired: ${
+            parsedData.totalTokens
+          } tokens\n\nPlease approve the TSender contract first.`
+        );
+        return;
+      }
+      // TODO: Implement token sending logic
+    } catch (error) {
+      console.error("❌ Error checking allowance:", error);
+      alert(
+        `Error checking allowance: ${
+          error instanceof Error ? error.message : "Unknown error"
+        }`
+      );
+    }
   };
 
   return (
